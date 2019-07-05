@@ -5,8 +5,7 @@
   "main": "index.js",
   "scripts": { 
     "build:ui": "del build && cd ../tehtavat/osa2/puhelinluettelo && npm run build --prod && robocopy build  ../../../osa3/build /S",
-    "deploy:full": "git add . && git commit -m 'uibuild' && git push phonebook master",
-    "deploy": "git push phonebook master", 
+    "deploy": "git add . && git commit -m 'uibuild' && git push phonebook master",
     "start": "node index.js",
     "watch": "nodemon index.js",
     "logs:prod": "heroku logs --tail"
