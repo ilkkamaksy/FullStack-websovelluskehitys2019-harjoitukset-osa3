@@ -1,13 +1,15 @@
+require('dotenv').config();
 const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const Contact = require('./models/contact');
 const morgan = require('morgan');
 morgan.token('request-body', (req, res) => { 
     return JSON.stringify(req.body) 
 });
 
-const customMorgan = morgan(function (tokens, req, res) {
+const logger = morgan(function (tokens, req, res) {
     return [
       tokens.method(req, res),
       tokens.url(req, res),
@@ -16,88 +18,43 @@ const customMorgan = morgan(function (tokens, req, res) {
       tokens['response-time'](req, res), 'ms',
       tokens['request-body'](req, res),
     ].join(' ')
-  })
-
-app.use(bodyParser.json());
-app.use(customMorgan);
-app.use(cors());
-app.use(express.static('build'));
-
-let persons = [
-          {
-            "name": "Arto Hellas",
-            "number": "040-123456",
-            "id": 1
-          },
-          {
-            "name": "Ada Lovelace",
-            "number": "39-44-5323523",
-            "id": 2
-          },
-          {
-            "name": "Dan Abramov",
-            "number": "12-43-234345",
-            "id": 3
-          },
-          {
-            "name": "Mary Poppendieck",
-            "number": "39-23-6423122",
-            "id": 4
-          },
-          {
-            "name": "Matti Meikäläinen",
-            "number": "0123 1231232",
-            "id": 5
-          },
-          {
-            "name": "Erkki Esimerkki",
-            "number": "044 123123",
-            "id": 6
-          },
-          {
-            "name": "Pekka Pouta",
-            "number": "0400 700 700",
-            "id": 7
-          },
-          {
-            "name": "Matti Tapio",
-            "number": "0124 12312",
-            "id": 8
-          }
-        ]
-
-const generateId = () => {
-    const maxId = persons.length > 0
-    ? Math.max(...persons.map(p => p.id))
-    : 0
-    return Math.floor(Math.random() * (1000 - maxId) + 1000);
-}
-
-app.get('/info', (request, response) => {
-    const date = new Date();
-    const content = `<p>Phonebook has info for ${persons.length} people</p>
-                    <p>${date}</p>`;
-    response.send(content)
-})
-
-app.get('/api/persons', (request, response) => {
-    response.send(persons);
 });
 
-app.get('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id);
-    const person = persons.find(person => {
-        return person.id === id
-    });
+app.use(express.static('build'));
+app.use(bodyParser.json());
+app.use(logger);
+app.use(cors());
 
-    if ( person ) {
-        response.json(person);
-    } else {
-        response.status(404).send("404 not found").end();
-    }
+app.get('/info', (request, response) => {
+    Contact.find({}).then(contacts => {
+        const date = new Date();
+        const content = `<p>Phonebook has info for ${contacts.length} people</p>
+                        <p>${date}</p>`;
+        response.send(content);    
+    });
+});
+
+app.get('/api/persons', (request, response) => {
+    Contact.find({}).then(contacts => {
+        response.json(contacts.map(contact => contact.toJSON()));
+    });
+});
+
+app.get('/api/persons/:id', (request, response, next) => {
+    
+    Contact.findById(request.params.id).then(contact => {
+        if ( contact ) {
+            response.json(contact.toJSON());
+        } else {
+            response.status(404).end();
+        }
+        
+    })
+    .catch(error => next(error))
 });
 
 app.post('/api/persons', (request, response) => {
+
     const body = request.body;
     
     if ( !body.name ) {
@@ -112,36 +69,60 @@ app.post('/api/persons', (request, response) => {
         });
     }
 
-    const person = {    
+    const contact = new Contact({    
         name: body.name,
-        number: body.number,
-        id: generateId()
-    }
-
-    const duplicate = persons.find(person => {
-        return person.name === body.name
+        number: body.number
     });
-
-    if ( typeof duplicate !== 'undefined' ) {
-        return response.status(400).json({
-            error: 'Name must be unique'
-        });    
-    } 
-
-    persons.concat(person);
-    response.json(person)
     
+    contact.save().then(savedContact => {
+        response.json(savedContact.toJSON());
+    })
 });
 
-app.delete('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id);
-    persons = persons.filter(person => {
-        return person.id === id
-    });
-    response.status(204).end();
+app.put('/api/persons/:id', (request, response, next) => {
+
+    const body = request.body;
+
+    const contact = {
+        name: body.name,
+        number: body.number
+    };
+
+    Contact.findByIdAndUpdate(request.params.id, contact, { new: true })
+    .then(updatedContact => {
+        response.json(updatedContact.toJSON());
+    })
+    .catch(error => next(error))
+})
+
+app.delete('/api/persons/:id', (request, response, next) => {
+    Contact.findByIdAndRemove(request.params.id)
+    .then(result => {
+        response.status(204).end();
+    })
+    .catch(error => next(error));
 });
 
-const PORT = process.env.PORT || 3001;
+const unknownEndpoint = (request, response) => {
+    response.status(404).send({ error: 'unknown endpoint' })
+}
+
+app.use(unknownEndpoint)
+
+const errorHandler = (error, request, response, next) => {
+
+    console.error(error.message)
+  
+    if (error.name === 'CastError' && error.kind == 'ObjectId') {
+      return response.status(400).send({ error: 'malformatted id' })
+    } 
+  
+    next(error)
+}
+
+app.use(errorHandler);
+
+const PORT = process.env.PORT;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
 });
