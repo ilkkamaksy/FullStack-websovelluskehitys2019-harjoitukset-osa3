@@ -19,23 +19,25 @@ const contactSchema = new mongoose.Schema({
 const Contact = mongoose.model('Contact', contactSchema);
 
 if (process.argv.length<4) {
-    Contact.find({}).then(result => {
-    result.forEach(contact => {
-        console.log(`${contact.name} ${contact.number}`);
-    });
-    mongoose.connection.close();
-    });
+    Contact
+        .find({})
+        .then(result => {
+            result.forEach(contact => {
+                console.log(`${contact.name} ${contact.number}`);
+            });
+            mongoose.connection.close();
+        });
 } else if (process.argv.length >= 4) {
     const contactName = process.argv[3];
     const contactNumber = process.argv[4];
-    
     const contact = new Contact({
         name: contactName,
         number: contactNumber
     });
-    
-    contact.save().then(response => {
-        console.log(`added ${response.name} ${response.number} to phonebook`);
-        mongoose.connection.close();
-    });
+    contact
+        .save()
+        .then(response => {
+            console.log(`added ${response.name} ${response.number} to phonebook`);
+            mongoose.connection.close();
+        });
 }
